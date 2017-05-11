@@ -1,15 +1,26 @@
+import java.util.Arrays;
 public class Data
 {
 	private Integer seq;
 	private Boolean ack;
 	private byte[] data;
 	
-	public Data(Integer seq)
+	public Data(Integer seq,Boolean ack)
 	{
 		this.seq = seq;
+		this.ack = ack;
+		if(!ack)
+		{
+			data = new byte[1467];
+			Arrays.fill(data, Byte.MAX_VALUE);
+		}
+		else
+		{
+			data = new byte[0];
+		}
 	}
 	
-	public Data(byte[] inputStream)
+	public Data(byte[] inputStream, int length)
 	{
 		if (inputStream.length < 4 || inputStream.length > 1472)
 			throw new IllegalArgumentException("数据包格式非法");
@@ -50,7 +61,7 @@ public class Data
 	{
 		this.data = data;
 	}
-	public Boolean getAck()
+	public Boolean isAck()
 	{
 		return ack;
 	}

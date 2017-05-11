@@ -1,9 +1,7 @@
-import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.Timer;
 import java.util.TimerTask;
 public class Sender extends Thread
@@ -33,11 +31,12 @@ public class Sender extends Thread
 			for (int i = 0; i < 100; i++)
 			{
 				ack(ackedSeq);
-				Data data = new Data(seq);
+				Thread.sleep(100);
+				Data data = new Data(seq,false);
 				byte[] bytes = data.getBytes();
 				DatagramPacket packet =
 						new DatagramPacket(bytes, bytes.length, InetAddress.getByName("127.0.0.1"), port);
-				if(addToWindow(seq,packet))
+				if (addToWindow(seq, packet))
 					seq++;
 				else
 					i--;
@@ -56,11 +55,22 @@ public class Sender extends Thread
 		for (; sendBase < ackedSeq; sendBase++)
 			window.remove(sendBase);
 	}
-	
-	class TimeOverEvent extends TimerTask
+	private Boolean addToWindow(int seq, DatagramPacket data) throws Exception
+	{
+		if (window.size() < windowSize)
+		{
+			window.put(seq, data);
+			socket.send(data);
+			Timer t = new Timer();
+			t.schedule(new TimeOutEvent(seq), timeoutLength);
+			return true;
+		}
+		return false;
+	}
+	class TimeOutEvent extends TimerTask
 	{
 		private int seq;
-		public TimeOverEvent(int seq)
+		public TimeOutEvent(int seq)
 		{
 			this.seq = seq;
 		}
@@ -71,25 +81,12 @@ public class Sender extends Thread
 			{
 				socket.send(window.get(seq));
 				Timer t = new Timer();
-				t.schedule(new TimeOverEvent(seq),timeoutLength);
+				t.schedule(new TimeOutEvent(seq), timeoutLength);
 			}
 			catch (Exception e)
 			{
 				e.printStackTrace();
 			}
 		}
-	}
-	
-	private Boolean addToWindow(int seq, DatagramPacket data) throws Exception
-	{
-		if (window.size() < windowSize)
-		{
-			window.put(seq,data);
-			socket.send(data);
-			Timer t = new Timer();
-			t.schedule(new TimeOverEvent(seq),timeoutLength);
-			return true;
-		}
-		return false;
 	}
 }
