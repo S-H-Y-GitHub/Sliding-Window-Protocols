@@ -7,19 +7,23 @@ import java.util.TimerTask;
 public class Sender extends Thread
 {
 	private DatagramSocket socket;
-	private Integer ackedSeq;
+	private AckedSeq ackedSeq;
 	private int windowSize = 16;
 	private int timeoutLength = 2000;
+	private int delay = 100;
 	private int port;
 	private HashMap<Integer, DatagramPacket> window;
 	private int sendBase;
-	
-	public Sender(DatagramSocket socket, Integer ackedSeq, int targetPort)
+	private Timer t;
+	private String tag;
+	public Sender(DatagramSocket socket, AckedSeq ackedSeq, int targetPort, String tag)
 	{
 		this.socket = socket;
 		this.ackedSeq = ackedSeq;
 		port = targetPort;
 		window = new HashMap<>();
+		t = new Timer();
+		this.tag = tag;
 	}
 	
 	@Override
@@ -28,21 +32,21 @@ public class Sender extends Thread
 		try
 		{
 			int seq = sendBase = 0;
+			t.schedule(new TimeOutEvent(seq), timeoutLength);
 			for (int i = 0; i < 100; i++)
 			{
-				ack(ackedSeq);
-				Thread.sleep(100);
+				ack(ackedSeq.ackedSeq);
 				Data data = new Data(seq,false);
 				byte[] bytes = data.getBytes();
 				DatagramPacket packet =
 						new DatagramPacket(bytes, bytes.length, InetAddress.getByName("127.0.0.1"), port);
-				if (addToWindow(seq, packet))
+				if (sendData(seq, packet))
 					seq++;
 				else
 					i--;
-				ack(ackedSeq);
+				Thread.sleep(delay);
+				ack(ackedSeq.ackedSeq);
 			}
-			socket.close();
 		}
 		catch (Exception e)
 		{
@@ -50,19 +54,24 @@ public class Sender extends Thread
 		}
 	}
 	
-	private void ack(int ackedSeq)
+	synchronized private void ack(int ackedSeq)
 	{
-		for (; sendBase < ackedSeq; sendBase++)
+		if (sendBase < ackedSeq)
+		{
+			t.cancel();
+			t = new Timer();
+			t.schedule(new TimeOutEvent(ackedSeq + 1), timeoutLength);
+		}
+		for (; sendBase <= ackedSeq; sendBase++)
 			window.remove(sendBase);
 	}
-	private Boolean addToWindow(int seq, DatagramPacket data) throws Exception
+	synchronized private Boolean sendData(int seq, DatagramPacket data) throws Exception
 	{
 		if (window.size() < windowSize)
 		{
 			window.put(seq, data);
+			System.out.println(tag + "\t[send]\t" + seq);
 			socket.send(data);
-			Timer t = new Timer();
-			t.schedule(new TimeOutEvent(seq), timeoutLength);
 			return true;
 		}
 		return false;
@@ -79,9 +88,15 @@ public class Sender extends Thread
 		{
 			try
 			{
-				socket.send(window.get(seq));
-				Timer t = new Timer();
+				System.out.println(tag + "\t[time]\t" + seq);
 				t.schedule(new TimeOutEvent(seq), timeoutLength);
+				while (window.containsKey(seq))
+				{
+					System.out.println(tag + "\t[send]\t" + seq);
+					socket.send(window.get(seq));
+					seq++;
+					Thread.sleep(delay);
+				}
 			}
 			catch (Exception e)
 			{

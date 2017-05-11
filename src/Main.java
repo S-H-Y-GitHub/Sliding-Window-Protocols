@@ -2,7 +2,9 @@ public class Main
 {
 	public static void main(String[] args)
 	{
-		//1.建立两个线程，一收一发，收信方监听某个端口，发送方指定另一个端口
-		//2.发送方发一系列数据，接收方ACK最后一条
+		SocketThread s1 = new SocketThread(2333, 6666, "线程1");
+		SocketThread s2 = new SocketThread(6666, 2333, "线程2");
+		s1.start();
+		s2.start();
 	}
 }
