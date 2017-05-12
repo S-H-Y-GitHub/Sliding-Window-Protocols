@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/03_GBN_Protocol.iml" filepath="$PROJECT_DIR$/03_GBN_Protocol.iml" />
+      <module fileurl="file://$PROJECT_DIR$/03_RDT_Protocol.iml" filepath="$PROJECT_DIR$/03_RDT_Protocol.iml" />
     </modules>
   </component>
 </project>
