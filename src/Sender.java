@@ -7,22 +7,24 @@ import java.util.TimerTask;
 public class Sender extends Thread
 {
 	private DatagramSocket socket;
-	private AckedSeq ackedSeq;
+	private AckSeq ackSeq;
 	private int windowSize = 16;
 	private int timeoutLength = 2000;
 	private int delay = 100;
 	private int port;
 	private HashMap<Integer, DatagramPacket> window;
+	private HashMap<Integer, Boolean> ackWindow;
+	private HashMap<Integer, Timer> timers;
 	private int sendBase;
-	private Timer t;
 	private String tag;
-	public Sender(DatagramSocket socket, AckedSeq ackedSeq, int targetPort, String tag)
+	public Sender(DatagramSocket socket, AckSeq ackSeq, int targetPort, String tag)
 	{
 		this.socket = socket;
-		this.ackedSeq = ackedSeq;
+		this.ackSeq = ackSeq;
 		port = targetPort;
 		window = new HashMap<>();
-		t = new Timer();
+		ackWindow = new HashMap<>();
+		timers = new HashMap<>();
 		this.tag = tag;
 	}
 	
@@ -32,10 +34,9 @@ public class Sender extends Thread
 		try
 		{
 			int seq = sendBase = 0;
-			t.schedule(new TimeOutEvent(seq), timeoutLength);
 			for (int i = 0; i < 100; i++)
 			{
-				ack(ackedSeq.ackedSeq);
+				ack(ackSeq.ackSeq);
 				Data data = new Data(seq,false);
 				byte[] bytes = data.getBytes();
 				DatagramPacket packet =
@@ -45,7 +46,7 @@ public class Sender extends Thread
 				else
 					i--;
 				Thread.sleep(delay);
-				ack(ackedSeq.ackedSeq);
+				ack(ackSeq.ackSeq);
 			}
 		}
 		catch (Exception e)
@@ -56,22 +57,34 @@ public class Sender extends Thread
 	
 	synchronized private void ack(int ackedSeq)
 	{
-		if (sendBase < ackedSeq)
+		if (ackWindow.containsKey(ackedSeq) && !ackWindow.get(ackedSeq))
 		{
-			t.cancel();
-			t = new Timer();
-			t.schedule(new TimeOutEvent(ackedSeq + 1), timeoutLength);
+			//更新ACK表
+			ackWindow.put(ackedSeq, true);
+			//停止计时器
+			timers.get(ackedSeq).cancel();
+			timers.remove(ackedSeq);
+			//滑动窗口
+			if (ackedSeq == sendBase)
+				for (; ackWindow.containsKey(sendBase) && ackWindow.get(sendBase); sendBase++)
+					window.remove(sendBase);
 		}
-		for (; sendBase <= ackedSeq; sendBase++)
-			window.remove(sendBase);
 	}
 	synchronized private Boolean sendData(int seq, DatagramPacket data) throws Exception
 	{
+		//判断窗口是否已满
 		if (window.size() < windowSize)
 		{
+			//加入窗口
 			window.put(seq, data);
+			ackWindow.put(seq, false);
 			System.out.println(tag + "\t[send]\t" + seq);
+			//发送数据
 			socket.send(data);
+			//开始计时
+			Timer t = new Timer();
+			t.schedule(new TimeOutEvent(seq), timeoutLength, timeoutLength);
+			timers.put(seq, t);
 			return true;
 		}
 		return false;
@@ -89,14 +102,9 @@ public class Sender extends Thread
 			try
 			{
 				System.out.println(tag + "\t[time]\t" + seq);
-				t.schedule(new TimeOutEvent(seq), timeoutLength);
-				while (window.containsKey(seq))
-				{
-					System.out.println(tag + "\t[send]\t" + seq);
-					socket.send(window.get(seq));
-					seq++;
-					Thread.sleep(delay);
-				}
+				System.out.println(tag + "\t[send]\t" + seq);
+				//重发分组
+				socket.send(window.get(seq));
 			}
 			catch (Exception e)
 			{

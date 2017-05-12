@@ -4,15 +4,14 @@ import java.net.InetAddress;
 public class Receiver extends Thread
 {
 	private DatagramSocket socket;
-	private AckedSeq ackedSeq;
-	private Integer nextSeq;
+	private AckSeq ackSeq;
 	private int port;
 	private String tag;
 	
-	public Receiver(DatagramSocket socket, AckedSeq ackedSeq, int targetPort, String tag)
+	public Receiver(DatagramSocket socket, AckSeq ackSeq, int targetPort, String tag)
 	{
 		this.socket = socket;
-		this.ackedSeq = ackedSeq;
+		this.ackSeq = ackSeq;
 		port = targetPort;
 		this.tag = tag;
 	}
@@ -22,40 +21,31 @@ public class Receiver extends Thread
 		try
 		{
 			DatagramPacket packet = new DatagramPacket(new byte[1472], 1472);
-			socket.receive(packet);
-			int n = 1;
-			byte[] arr = packet.getData();                            //获取数据
-			int len = packet.getLength();                            //获取有效的字节个数
-			Data data = new Data(arr, len);
-			nextSeq = data.getSeq() + 1;
+			int n = 0;
 			while (true)
 			{
 				socket.receive(packet);
-				arr = packet.getData();
-				len = packet.getLength();
-				data = new Data(arr, len);
+				byte[] arr = packet.getData();
+				int len = packet.getLength();
+				Data data = new Data(arr, len);
 				if (data.isAck())
 				{
-					if (data.getSeq() > ackedSeq.ackedSeq)
-					{
-						ackedSeq.ackedSeq = data.getSeq();
-						System.out.println(tag + "\t[ack]\t" + ackedSeq.ackedSeq);
-					}
+					ackSeq.ackSeq = data.getSeq();
+					System.out.println(tag + "\t[ack]\t" + ackSeq.ackSeq);
 				}
 				else
 				{
 					n++;
-					if (data.getSeq() == nextSeq)
-						nextSeq++;
-					if (n >= 20)
+					if (n != 10)
 					{
-						Data data1 = new Data(nextSeq - 1, true);
+						Data data1 = new Data(data.getSeq(), true);
 						byte[] bytes = data1.getBytes();
 						DatagramPacket packet1 =
 								new DatagramPacket(bytes, bytes.length, InetAddress.getByName("127.0.0.1"), port);
 						socket.send(packet1);
-						n = 0;
 					}
+					else
+						n = 0;
 				}
 			}
 		}

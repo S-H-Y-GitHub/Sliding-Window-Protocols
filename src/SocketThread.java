@@ -16,10 +16,10 @@ public class SocketThread extends Thread
 		try
 		{
 			DatagramSocket socket = new DatagramSocket(selfPort);
-			AckedSeq ackedSeq = new AckedSeq();
-			ackedSeq.ackedSeq = -1;
-			Receiver receiver = new Receiver(socket, ackedSeq, targetPort, tag);
-			Sender sender = new Sender(socket, ackedSeq, targetPort, tag);
+			AckSeq ackSeq = new AckSeq();
+			ackSeq.ackSeq = -1;
+			Receiver receiver = new Receiver(socket, ackSeq, targetPort, tag);
+			Sender sender = new Sender(socket, ackSeq, targetPort, tag);
 			receiver.start();
 			sender.start();
 		}
